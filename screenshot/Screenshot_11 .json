@@ -1,0 +1,40 @@
+{
+  "version": "4.2.0",
+  "flags": {},
+  "checked": false,
+  "shapes": [
+    {
+      "label": "game",
+      "score": null,
+      "points": [
+        [
+          118.64634146341471,
+          403.5243902439025
+        ],
+        [
+          360.10975609756105,
+          403.5243902439025
+        ],
+        [
+          360.10975609756105,
+          651.0853658536586
+        ],
+        [
+          118.64634146341471,
+          651.0853658536586
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {},
+      "kie_linking": []
+    }
+  ],
+  "imagePath": "Screenshot_11 .png",
+  "imageData": null,
+  "imageHeight": 1079,
+  "imageWidth": 1919
+}
