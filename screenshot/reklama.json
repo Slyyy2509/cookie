@@ -1,0 +1,40 @@
+{
+  "version": "4.2.0",
+  "flags": {},
+  "checked": false,
+  "shapes": [
+    {
+      "label": "game",
+      "score": null,
+      "points": [
+        [
+          1447.9146341463415,
+          260.8414634146342
+        ],
+        [
+          1496.6951219512196,
+          260.8414634146342
+        ],
+        [
+          1496.6951219512196,
+          313.2804878048781
+        ],
+        [
+          1447.9146341463415,
+          313.2804878048781
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {},
+      "kie_linking": []
+    }
+  ],
+  "imagePath": "reklama.png",
+  "imageData": null,
+  "imageHeight": 1079,
+  "imageWidth": 1919
+}
