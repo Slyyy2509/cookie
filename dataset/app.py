@@ -1,87 +1,89 @@
+import sys
+import threading
 import time
 
 import cv2
 import numpy as np
 import pyautogui
+from pynput import keyboard
 from ultralytics import YOLO
 
 model = YOLO('best.pt')
 
-# id классов из разметки:
-# 0 - печенька, 1 - кнопка закрытия рекламы, 2 - улучшение курсора
 COOKIE = 0
 CLOSE_AD = 1
 UP_CURSOR = 2
 
-CONF = 0.5  # минимальная уверенность модели
+CONF = 0.5
 
-# у каждого класса свой порог.
-# главную печеньку модель видит на 0.38, поэтому порог ниже.
-# мелкие падающие печеньки отсекаются не порогом, а размером (COOKIE_MIN_AREA)
-# крестик модель видит слабо (0.13-0.2), поэтому порог низкий.
 COOKIE_CONF = 0.3
 AD_CONF = 0.12
-# кнопку улучшения модель видит неуверенно (0.3), поэтому порог низкий
 UP_CURSOR_CONF = 0.25
 
-# минимальный размер печеньки как доля площади экрана.
-# главная печенька занимает 3% экрана, а падающие мелкие меньше 0.5%.
-# всё что мельче этого - не главная печенька, кликать туда не надо
 COOKIE_MIN_AREA = 0.015
 
-COOKIE_CLICKS = 10  # сколько раз подряд нажимаем печеньку
-CLICK_INTERVAL = 0.05  # пауза между кликами, секунды
+COOKIE_CLICKS = 10
+CLICK_INTERVAL = 0.05
 
-# размер, на котором работает модель. Должно совпадать с imgsz в train.py
 IMG_SIZE = 640
 
-# если резко дёрнуть мышь в угол экрана - программа остановится
 pyautogui.FAILSAFE = True
+
+STOP_KEYS = {'<ctrl>': 'Ctrl', '<alt>': 'Alt', 'q': 'Q'}
+HOTKEY = '+'.join(STOP_KEYS)
+HOTKEY_TEXT = '+'.join(STOP_KEYS.values())
+
+stop_requested = threading.Event()
+
+
+def _on_hotkey() -> None:
+    if not stop_requested.is_set():
+        print(f'\nОстановка по {HOTKEY_TEXT}')
+    stop_requested.set()
+
+
+def start_hotkey_listener() -> keyboard.Listener | None:
+    try:
+        listener = keyboard.GlobalHotKeys({HOTKEY: _on_hotkey})
+    except Exception as error:
+        print(f'Горячая клавиша недоступна ({error}). Остановка мышью в угол экрана.')
+        return None
+    listener.start()
+    return listener
 
 
 def get_screen():
-    # делаем скриншот и переводим его в тот формат, который понимает YOLO
     screenshot = np.array(pyautogui.screenshot())
     screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
     return screenshot
 
 
 def find_objects(image):
-    # ищем на картинке все объекты сразу, за один проход модели
-    # возвращаем словарь: id класса -> точка для клика
-    # verbose=False убирает лишний вывод от ultralytics в консоль
     result = model(image, conf=0.01, imgsz=IMG_SIZE, verbose=False)[0]
 
-    # площадь всего экрана, нужна чтобы понимать какая доля кадра занята
     height, width = image.shape[:2]
     frame = height * width
 
-    # минимальная уверенность для каждого класса
     limits = {COOKIE: COOKIE_CONF, CLOSE_AD: AD_CONF, UP_CURSOR: UP_CURSOR_CONF}
 
-    objects = {}  # класс -> точка для клика
-    scores = {}  # класс -> насколько хорош выбранный бокс
+    objects = {}
+    scores = {}
 
     for box in result.boxes:
         class_id = int(box.cls[0])
         conf = float(box.conf[0])
 
-        # если модель не уверена - пропускаем этот бокс
         if conf < limits[class_id]:
             continue
 
         x1, y1, x2, y2 = (float(v) for v in box.xyxy[0])
         area = (x2 - x1) * (y2 - y1)
 
-        # падающие мелкие печеньки пропускаем, нам нужна только главная
         if class_id == COOKIE and area < COOKIE_MIN_AREA * frame:
             continue
 
-        # печеньку выбираем по размеру: главная крупная.
-        # остальные классы выбираем по уверенности
         quality = area if class_id == COOKIE else conf
 
-        # оставляем только лучший бокс, иначе клик уходит не туда
         if class_id in scores and scores[class_id] >= quality:
             continue
 
@@ -92,35 +94,43 @@ def find_objects(image):
 
 
 def click(x, y, times=1):
-    # кликаем в точку. times - сколько раз подряд
     pyautogui.click(x, y, clicks=times, interval=CLICK_INTERVAL)
 
 
-def main():
-    while True:
+def run_loop() -> None:
+    while not stop_requested.is_set():
         objects = find_objects(get_screen())
 
-        # 1. реклама - если появилась, сразу закрываем
         if CLOSE_AD in objects:
             click(*objects[CLOSE_AD])
-            # print("закрыл рекламу")
-            time.sleep(0.2)  # ждём, пока реклама закроется
+            time.sleep(0.2)
             continue
 
-        # 2. улучшение курсора - нажимаем один раз
-        # это кнопка покупки, поэтому только один клик за цикл
         if UP_CURSOR in objects:
             click(*objects[UP_CURSOR])
-            # print("улучшил курсор")
-            time.sleep(0.2)  # даём кнопке исчезнуть после покупки
+            time.sleep(0.2)
             continue
 
-        # 3. печенька - нажимаем пока не мешает реклама
         if COOKIE in objects:
             click(*objects[COOKIE], times=COOKIE_CLICKS)
-            # print("нажал печеньку")
 
         time.sleep(0.1)
+
+
+def main() -> None:
+    sys.stdout.reconfigure(errors='replace')
+
+    listener = start_hotkey_listener()
+    print(f'AI работает. Остановка: {HOTKEY_TEXT} или мышь в угол экрана')
+
+    try:
+        run_loop()
+    except pyautogui.FailSafeException:
+        print('\nОстановка: мышь в углу экрана')
+    finally:
+        if listener is not None:
+            listener.stop()
+        print('Остановлено.')
 
 
 if __name__ == "__main__":

@@ -1,0 +1,13 @@
+# Прямые зависимости проекта dataset.
+# Версии - те, на которых проект проверен.
+
+ultralytics>=8.4.183
+opencv-python>=5.0.0.93
+numpy>=2.4.6
+pyautogui>=0.9.54
+pynput>=1.8.2
+
+# torch и torchvision ставит ultralytics автоматически (сборка CPU).
+# Если нужна видеокарта - поставь CUDA-версию ДО установки ultralytics,
+# иначе pip перезапишет её на CPU:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
