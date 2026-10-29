@@ -27,7 +27,7 @@ try:
         print(f"[{count}] Сохранено: {filename}")
 
         # Ждём 5 секунд
-        time.sleep(5)
+        time.sleep(3)
 
 except KeyboardInterrupt:
     print(f"\nОстановлено. Всего сделано скриншотов: {count}")

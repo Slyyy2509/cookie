@@ -1,12 +1,37 @@
+import os
 import sys
 import threading
 import time
+from pathlib import Path
 
 import cv2
 import numpy as np
-import pyautogui
-from pynput import keyboard
 from ultralytics import YOLO
+
+
+def _import_gui():
+    """Загрузить pyautogui/pynput, объяснив причину, если X-сервер недоступен."""
+    try:
+        import pyautogui
+        from pynput import keyboard
+    except Exception as error:
+        hint = ''
+        if sys.platform.startswith('linux'):
+            hint = (
+                '\nНужен X11: переменная DISPLAY не задана или X-сервер недоступен.'
+                '\nWayland не поддерживается - переключите сессию на "Ubuntu on Xorg".'
+            )
+        raise SystemExit(
+            f'Не удалось загрузить pyautogui/pynput: '
+            f'{type(error).__name__}: {error}{hint}'
+        ) from error
+    return pyautogui, keyboard
+
+
+pyautogui, keyboard = _import_gui()
+
+# CWD всегда = директория скрипта (как в train.py), иначе 'best.pt' не найдётся
+os.chdir(Path(__file__).resolve().parent)
 
 model = YOLO('best.pt')
 
@@ -14,22 +39,26 @@ COOKIE = 0
 CLOSE_AD = 1
 UP_CURSOR = 2
 
-CONF = 0.5
-
-COOKIE_CONF = 0.3
+COOKIE_CONF = 0.15
 AD_CONF = 0.12
 UP_CURSOR_CONF = 0.25
 
-COOKIE_MIN_AREA = 0.015
+# Печень занимает ~3% кадра, но в размеченных кадрах встречаются и 0.1%.
+# Порог отсекает только совсем мелкие боксы, не мешая настоящей печеньке.
+COOKIE_MIN_AREA = 0.005
 
 COOKIE_CLICKS = 10
 CLICK_INTERVAL = 0.05
 
-IMG_SIZE = 640
+# Печень на экране 1920x1080 занимает ~3% кадра. При 640 она превращается
+# в ~80x85 пикселей и теряется моделью (hit-rate 64% -> 88.9% при 1152).
+IMG_SIZE = 1152
 
 pyautogui.FAILSAFE = True
 
-STOP_KEYS = {'<ctrl>': 'Ctrl', '<alt>': 'Alt', 'q': 'Q'}
+# Пробел вместо Ctrl+Alt+Q: на Windows бэкенд отдаёт Ctrl как Key.ctrl_l,
+# а парсер pynput ждёт Key.ctrl — такой хоткей не срабатывает никогда.
+STOP_KEYS = {'<space>': 'Space'}
 HOTKEY = '+'.join(STOP_KEYS)
 HOTKEY_TEXT = '+'.join(STOP_KEYS.values())
 
@@ -101,18 +130,20 @@ def run_loop() -> None:
     while not stop_requested.is_set():
         objects = find_objects(get_screen())
 
+        # Реклама модальная: пока её не закрыли, клик по печенье уйдёт в рекламу.
         if CLOSE_AD in objects:
             click(*objects[CLOSE_AD])
             time.sleep(0.2)
             continue
 
-        if UP_CURSOR in objects:
-            click(*objects[UP_CURSOR])
-            time.sleep(0.2)
-            continue
-
+        # Печень и апгрейд кликаются в одном кадре: апгрейд не должен
+        # отнимать кадр у печенья (иначе печень кликается через раз).
         if COOKIE in objects:
             click(*objects[COOKIE], times=COOKIE_CLICKS)
+
+        if UP_CURSOR in objects:
+            click(*objects[UP_CURSOR])
+            time.sleep(0.05)
 
         time.sleep(0.1)
 

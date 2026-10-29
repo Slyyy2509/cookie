@@ -1,3 +1,4 @@
 game
 ad
 up_cursor
+up_click
